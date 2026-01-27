@@ -9,7 +9,7 @@ Building a minimal self-hosted file sharing service in Go, following `DESIGN.md`
 | Phase | Description | Status |
 |-------|-------------|--------|
 | 1 | Project Setup | Complete |
-| 2 | Core Upload (Non-Resumable) | Not started |
+| 2 | Core Upload (Non-Resumable) | Complete |
 | 3 | Download Flow | Not started |
 | 4 | Password Protection | Not started |
 | 5 | Basic UI | Not started |
@@ -53,10 +53,18 @@ curl http://localhost:8080/
 - Return `{ id, url }`
 
 ### Implementation Notes
-_To be filled in during implementation_
+- Created `storage.go` with `Storage` struct for file operations
+- `GenerateID()` creates 8-char base62 IDs using crypto/rand
+- `CreateShare()` saves file + meta.json to `data/shares/{id}/`
+- Created `handlers.go` with `HandleUpload` for POST /api/upload
+- `sanitizeFileName()` cleans filenames (removes path components, limits chars)
+- Returns JSON with `id` and `url`
 
 ### Testing
-_To be filled in during implementation_
+```bash
+curl -X POST -F "file=@test.txt" http://localhost:8080/api/upload
+# Returns: {"id":"LxhXurlH","url":"http://localhost:8080/s/LxhXurlH"}
+```
 
 ---
 
