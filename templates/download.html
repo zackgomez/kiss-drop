@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.FileName}} - kiss-drop</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>kiss-drop</h1>
+
+        <div class="file-card">
+            <div class="file-icon">📄</div>
+            <div class="file-details">
+                <div class="file-name">{{.FileName}}</div>
+                <div class="file-meta">
+                    {{.FileSizeFormatted}}
+                    {{if .ExpiresAt}}
+                    · Expires {{.ExpiresAt}}
+                    {{end}}
+                </div>
+            </div>
+        </div>
+
+        {{if .PasswordRequired}}
+        <div id="unlock-form" class="unlock-form">
+            <label>
+                Password:
+                <input type="password" id="password" placeholder="Enter password">
+            </label>
+            <button id="unlock-btn" class="btn">Unlock</button>
+            <div id="error" class="error" hidden></div>
+        </div>
+        {{end}}
+
+        <div id="download-section" class="download-section" {{if .PasswordRequired}}hidden{{end}}>
+            <a href="/api/share/{{.ID}}/download" class="btn btn-download">Download</a>
+        </div>
+
+        <div class="back-link">
+            <a href="/">Upload another file</a>
+        </div>
+    </div>
+
+    {{if .PasswordRequired}}
+    <script>
+        const unlockBtn = document.getElementById('unlock-btn');
+        const passwordInput = document.getElementById('password');
+        const errorDiv = document.getElementById('error');
+        const unlockForm = document.getElementById('unlock-form');
+        const downloadSection = document.getElementById('download-section');
+
+        async function unlock() {
+            const password = passwordInput.value;
+            if (!password) {
+                errorDiv.textContent = 'Please enter a password';
+                errorDiv.hidden = false;
+                return;
+            }
+
+            unlockBtn.disabled = true;
+            errorDiv.hidden = true;
+
+            try {
+                const response = await fetch('/api/share/{{.ID}}/unlock', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({password})
+                });
+
+                if (response.ok) {
+                    unlockForm.hidden = true;
+                    downloadSection.hidden = false;
+                } else {
+                    errorDiv.textContent = 'Invalid password';
+                    errorDiv.hidden = false;
+                    unlockBtn.disabled = false;
+                }
+            } catch (err) {
+                errorDiv.textContent = 'Error: ' + err.message;
+                errorDiv.hidden = false;
+                unlockBtn.disabled = false;
+            }
+        }
+
+        unlockBtn.addEventListener('click', unlock);
+        passwordInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') unlock();
+        });
+    </script>
+    {{end}}
+</body>
+</html>

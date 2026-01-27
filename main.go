@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -29,19 +30,36 @@ func main() {
 	// Initialize auth
 	auth := NewAuth(cookieSecret)
 
+	// Load templates
+	templates, err := LoadTemplates()
+	if err != nil {
+		log.Fatalf("Failed to load templates: %v", err)
+	}
+
 	// Initialize handlers
 	handlers := NewHandlers(storage, auth, baseURL)
 
-	// Routes
+	// Serve static files
+	staticContent, err := fs.Sub(staticFS, "static")
+	if err != nil {
+		log.Fatalf("Failed to get static fs: %v", err)
+	}
+	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticContent))))
+
+	// UI Routes
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
 			return
 		}
-		w.Header().Set("Content-Type", "text/plain")
-		w.Write([]byte("kiss-drop is running"))
+		handlers.HandleUploadPage(w, r, templates)
 	})
 
+	http.HandleFunc("/s/", func(w http.ResponseWriter, r *http.Request) {
+		handlers.HandleDownloadPage(w, r, templates)
+	})
+
+	// API Routes
 	http.HandleFunc("/api/upload", handlers.HandleUpload)
 	http.HandleFunc("/api/share/", func(w http.ResponseWriter, r *http.Request) {
 		// Route to appropriate handler based on path

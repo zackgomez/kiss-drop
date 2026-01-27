@@ -12,7 +12,7 @@ Building a minimal self-hosted file sharing service in Go, following `DESIGN.md`
 | 2 | Core Upload (Non-Resumable) | Complete |
 | 3 | Download Flow | Complete |
 | 4 | Password Protection | Complete |
-| 5 | Basic UI | Not started |
+| 5 | Basic UI | Complete |
 | 6 | Expiration | Not started |
 | 7 | Resumable Uploads | Not started |
 | 8 | Docker | Not started |
@@ -146,10 +146,20 @@ curl -b cookies.txt http://localhost:8080/api/share/$ID/download
 - Serve UI at `/` (upload) and `/s/:id` (download)
 
 ### Implementation Notes
-_To be filled in during implementation_
+- Created `templates.go` with embed directives for templates and static files
+- `templates/upload.html` - drag-and-drop upload with progress bar, password option
+- `templates/download.html` - file info, password unlock form, download button
+- `static/style.css` - clean minimal styling
+- All assets embedded in binary using Go's `//go:embed`
+- Upload page uses XHR for progress tracking
+- Download page conditionally shows unlock form based on passwordRequired
 
 ### Testing
-_To be filled in during implementation_
+- Open http://localhost:8080/ in browser
+- Drag and drop a file, optionally set password
+- After upload, copy the share link
+- Visit the share link to see download page
+- Password-protected shares show unlock form
 
 ---
 
