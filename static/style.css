@@ -86,9 +86,20 @@ h1 {
     font-size: 14px;
 }
 
-.options input:focus {
+.options input:focus,
+.options select:focus {
     outline: none;
     border-color: #007bff;
+}
+
+.options select {
+    width: 100%;
+    padding: 10px 12px;
+    margin-top: 5px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+    background: white;
 }
 
 .btn {

@@ -5,7 +5,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 )
 
 func getEnv(key, defaultValue string) string {
@@ -15,17 +17,55 @@ func getEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
+func parseDuration(s string, defaultDays int) time.Duration {
+	// Parse as number of days (e.g., "30" or "30d")
+	s = strings.TrimSuffix(s, "d")
+	days, err := strconv.Atoi(s)
+	if err != nil || days <= 0 {
+		days = defaultDays
+	}
+	return time.Duration(days) * 24 * time.Hour
+}
+
+func startCleanupWorker(storage *Storage, interval time.Duration) {
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		// Run immediately on startup
+		deleted, err := storage.CleanupExpired()
+		if err != nil {
+			log.Printf("Cleanup error: %v", err)
+		} else if deleted > 0 {
+			log.Printf("Cleaned up %d expired share(s)", deleted)
+		}
+
+		for range ticker.C {
+			deleted, err := storage.CleanupExpired()
+			if err != nil {
+				log.Printf("Cleanup error: %v", err)
+			} else if deleted > 0 {
+				log.Printf("Cleaned up %d expired share(s)", deleted)
+			}
+		}
+	}()
+}
+
 func main() {
 	port := getEnv("PORT", "8080")
 	dataDir := getEnv("DATA_DIR", "./data")
 	baseURL := getEnv("BASE_URL", "http://localhost:"+port)
 	cookieSecret := os.Getenv("COOKIE_SECRET") // Empty = random per restart
+	defaultExpiry := parseDuration(getEnv("DEFAULT_EXPIRY", "30d"), 30)
 
 	// Initialize storage
 	storage, err := NewStorage(dataDir)
 	if err != nil {
 		log.Fatalf("Failed to initialize storage: %v", err)
 	}
+
+	// Start cleanup worker (runs every hour)
+	startCleanupWorker(storage, time.Hour)
 
 	// Initialize auth
 	auth := NewAuth(cookieSecret)
@@ -37,7 +77,7 @@ func main() {
 	}
 
 	// Initialize handlers
-	handlers := NewHandlers(storage, auth, baseURL)
+	handlers := NewHandlers(storage, auth, baseURL, defaultExpiry)
 
 	// Serve static files
 	staticContent, err := fs.Sub(staticFS, "static")
@@ -74,6 +114,7 @@ func main() {
 
 	log.Printf("Starting kiss-drop on :%s", port)
 	log.Printf("Data directory: %s", dataDir)
+	log.Printf("Default expiry: %s", defaultExpiry)
 	if err := http.ListenAndServe(":"+port, nil); err != nil {
 		log.Fatal(err)
 	}

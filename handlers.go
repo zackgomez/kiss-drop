@@ -6,22 +6,26 @@ import (
 	"net/http"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // Handlers holds HTTP handlers and their dependencies
 type Handlers struct {
-	storage *Storage
-	auth    *Auth
-	baseURL string
+	storage       *Storage
+	auth          *Auth
+	baseURL       string
+	defaultExpiry time.Duration
 }
 
 // NewHandlers creates a new Handlers instance
-func NewHandlers(storage *Storage, auth *Auth, baseURL string) *Handlers {
+func NewHandlers(storage *Storage, auth *Auth, baseURL string, defaultExpiry time.Duration) *Handlers {
 	return &Handlers{
-		storage: storage,
-		auth:    auth,
-		baseURL: strings.TrimSuffix(baseURL, "/"),
+		storage:       storage,
+		auth:          auth,
+		baseURL:       strings.TrimSuffix(baseURL, "/"),
+		defaultExpiry: defaultExpiry,
 	}
 }
 
@@ -83,8 +87,27 @@ func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 		passwordHash = hash
 	}
 
+	// Handle expiration
+	var expiresAt *time.Time
+	expiresInStr := r.FormValue("expires_in")
+	if expiresInStr == "" || expiresInStr == "default" {
+		// Use default expiry
+		if h.defaultExpiry > 0 {
+			t := time.Now().Add(h.defaultExpiry)
+			expiresAt = &t
+		}
+	} else if expiresInStr != "never" {
+		// Parse as days
+		days, err := strconv.Atoi(expiresInStr)
+		if err == nil && days > 0 {
+			t := time.Now().Add(time.Duration(days) * 24 * time.Hour)
+			expiresAt = &t
+		}
+	}
+	// "never" means no expiration (expiresAt stays nil)
+
 	// Create the share
-	meta, err := h.storage.CreateShare(file, fileName, header.Size, nil, passwordHash)
+	meta, err := h.storage.CreateShare(file, fileName, header.Size, expiresAt, passwordHash)
 	if err != nil {
 		log.Printf("Error creating share: %v", err)
 		http.Error(w, "Error saving file", http.StatusInternalServerError)

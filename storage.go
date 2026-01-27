@@ -145,3 +145,43 @@ func (s *Storage) saveMeta(meta *ShareMeta) error {
 
 	return nil
 }
+
+// DeleteShare removes a share and its files
+func (s *Storage) DeleteShare(id string) error {
+	return os.RemoveAll(s.shareDir(id))
+}
+
+// CleanupExpired removes all expired shares
+func (s *Storage) CleanupExpired() (int, error) {
+	sharesDir := filepath.Join(s.dataDir, "shares")
+	entries, err := os.ReadDir(sharesDir)
+	if err != nil {
+		return 0, fmt.Errorf("reading shares directory: %w", err)
+	}
+
+	now := time.Now()
+	deleted := 0
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		meta, err := s.GetShare(entry.Name())
+		if err != nil {
+			continue // Skip shares with invalid metadata
+		}
+		if meta == nil {
+			continue
+		}
+
+		if meta.ExpiresAt != nil && meta.ExpiresAt.Before(now) {
+			if err := s.DeleteShare(meta.ID); err != nil {
+				continue // Log but continue with other shares
+			}
+			deleted++
+		}
+	}
+
+	return deleted, nil
+}

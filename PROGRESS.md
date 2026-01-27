@@ -13,7 +13,7 @@ Building a minimal self-hosted file sharing service in Go, following `DESIGN.md`
 | 3 | Download Flow | Complete |
 | 4 | Password Protection | Complete |
 | 5 | Basic UI | Complete |
-| 6 | Expiration | Not started |
+| 6 | Expiration | Complete |
 | 7 | Resumable Uploads | Not started |
 | 8 | Docker | Not started |
 
@@ -173,10 +173,26 @@ curl -b cookies.txt http://localhost:8080/api/share/$ID/download
 - Log deletions
 
 ### Implementation Notes
-_To be filled in during implementation_
+- Added `expires_in` form field to upload (accepts days or "never")
+- `DEFAULT_EXPIRY` env var (default 30d) sets default expiration
+- Added expiration dropdown to upload UI (1d, 7d, 30d, 90d, never)
+- `CleanupExpired()` in storage.go scans and deletes expired shares
+- Background goroutine runs cleanup every hour
+- Runs immediately on startup, then hourly
 
 ### Testing
-_To be filled in during implementation_
+```bash
+# Upload with 1 day expiry
+curl -X POST -F "file=@test.txt" -F "expires_in=1" http://localhost:8080/api/upload
+
+# Check metadata shows expiresAt
+curl http://localhost:8080/api/share/$ID
+# Returns: {"expiresAt":"2026-01-27T21:32:39Z",...}
+
+# Upload with never expiry
+curl -X POST -F "file=@test.txt" -F "expires_in=never" http://localhost:8080/api/upload
+# No expiresAt in response
+```
 
 ---
 
