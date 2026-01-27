@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 )
 
 func getEnv(key, defaultValue string) string {
@@ -38,6 +39,14 @@ func main() {
 	})
 
 	http.HandleFunc("/api/upload", handlers.HandleUpload)
+	http.HandleFunc("/api/share/", func(w http.ResponseWriter, r *http.Request) {
+		// Route to appropriate handler based on path
+		if strings.HasSuffix(r.URL.Path, "/download") {
+			handlers.HandleDownload(w, r)
+		} else {
+			handlers.HandleShareInfo(w, r)
+		}
+	})
 
 	log.Printf("Starting kiss-drop on :%s", port)
 	log.Printf("Data directory: %s", dataDir)

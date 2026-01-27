@@ -1,0 +1,10 @@
+# Binary
+kiss-drop
+
+# Data directory
+data/
+
+# IDE
+.idea/
+.vscode/
+*.swp

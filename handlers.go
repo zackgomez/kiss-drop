@@ -86,3 +86,90 @@ func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
+
+// ShareInfoResponse is the JSON response for share metadata
+type ShareInfoResponse struct {
+	ID               string  `json:"id"`
+	FileName         string  `json:"fileName"`
+	FileSize         int64   `json:"fileSize"`
+	ExpiresAt        *string `json:"expiresAt,omitempty"`
+	PasswordRequired bool    `json:"passwordRequired"`
+}
+
+// HandleShareInfo handles GET /api/share/:id
+func (h *Handlers) HandleShareInfo(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	id := strings.TrimPrefix(r.URL.Path, "/api/share/")
+	if id == "" || strings.Contains(id, "/") {
+		http.Error(w, "Invalid share ID", http.StatusBadRequest)
+		return
+	}
+
+	meta, err := h.storage.GetShare(id)
+	if err != nil {
+		log.Printf("Error getting share: %v", err)
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+	if meta == nil {
+		http.Error(w, "Share not found", http.StatusNotFound)
+		return
+	}
+
+	response := ShareInfoResponse{
+		ID:               meta.ID,
+		FileName:         meta.FileName,
+		FileSize:         meta.FileSize,
+		PasswordRequired: meta.PasswordHash != "",
+	}
+	if meta.ExpiresAt != nil {
+		exp := meta.ExpiresAt.Format("2006-01-02T15:04:05Z")
+		response.ExpiresAt = &exp
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// HandleDownload handles GET /api/share/:id/download
+func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract ID from path like /api/share/abc123/download
+	path := strings.TrimPrefix(r.URL.Path, "/api/share/")
+	path = strings.TrimSuffix(path, "/download")
+	id := path
+
+	if id == "" || strings.Contains(id, "/") {
+		http.Error(w, "Invalid share ID", http.StatusBadRequest)
+		return
+	}
+
+	meta, err := h.storage.GetShare(id)
+	if err != nil {
+		log.Printf("Error getting share: %v", err)
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+	if meta == nil {
+		http.Error(w, "Share not found", http.StatusNotFound)
+		return
+	}
+
+	// TODO: Check password in Phase 4
+
+	filePath := h.storage.GetFilePath(id, meta.FileName)
+
+	// Set headers for download
+	w.Header().Set("Content-Disposition", "attachment; filename=\""+meta.FileName+"\"")
+	w.Header().Set("Content-Type", "application/octet-stream")
+
+	http.ServeFile(w, r, filePath)
+}

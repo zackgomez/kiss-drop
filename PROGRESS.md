@@ -10,7 +10,7 @@ Building a minimal self-hosted file sharing service in Go, following `DESIGN.md`
 |-------|-------------|--------|
 | 1 | Project Setup | Complete |
 | 2 | Core Upload (Non-Resumable) | Complete |
-| 3 | Download Flow | Not started |
+| 3 | Download Flow | Complete |
 | 4 | Password Protection | Not started |
 | 5 | Basic UI | Not started |
 | 6 | Expiration | Not started |
@@ -77,10 +77,20 @@ curl -X POST -F "file=@test.txt" http://localhost:8080/api/upload
 - Implement `GET /api/share/:id/download` - serve file with Content-Disposition: attachment
 
 ### Implementation Notes
-_To be filled in during implementation_
+- Added `HandleShareInfo` for GET /api/share/:id - returns JSON with file metadata
+- Added `HandleDownload` for GET /api/share/:id/download - serves file with Content-Disposition: attachment
+- Used path prefix routing in main.go since Go's default mux doesn't support path params
 
 ### Testing
-_To be filled in during implementation_
+```bash
+# Get share info
+curl http://localhost:8080/api/share/1itfPbHF
+# Returns: {"id":"1itfPbHF","fileName":"test.txt","fileSize":18,"passwordRequired":false}
+
+# Download file
+curl http://localhost:8080/api/share/1itfPbHF/download
+# Returns: file contents
+```
 
 ---
 
