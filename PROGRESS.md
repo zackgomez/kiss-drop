@@ -15,7 +15,7 @@ Building a minimal self-hosted file sharing service in Go, following `DESIGN.md`
 | 5 | Basic UI | Complete |
 | 6 | Expiration | Complete |
 | 7 | Resumable Uploads | Complete |
-| 8 | Docker | Not started |
+| 8 | Docker | Complete |
 
 ---
 
@@ -243,10 +243,28 @@ curl -X POST http://localhost:8080/api/upload/xyz/complete
 - Test build and run
 
 ### Implementation Notes
-_To be filled in during implementation_
+- Multi-stage Dockerfile: golang:1.25-alpine for build, alpine:3.21 for runtime
+- Static binary with CGO disabled, stripped symbols (-ldflags="-s -w")
+- Final image size: 25.9MB (well under 50MB target)
+- Runs as non-root user (kissuser, UID 1000)
+- Added .dockerignore to exclude unnecessary files
 
 ### Testing
-_To be filled in during implementation_
+```bash
+# Build
+docker build -t kiss-drop:latest .
+
+# Check size
+docker images kiss-drop:latest
+# REPOSITORY   TAG       SIZE
+# kiss-drop    latest    25.9MB
+
+# Run
+docker run -d -p 8080:8080 -v kiss-drop-data:/data kiss-drop:latest
+
+# Test
+curl http://localhost:8080/
+```
 
 ---
 
@@ -254,10 +272,14 @@ _To be filled in during implementation_
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
-| | | |
+| 2026-01-26 | Use stdlib http mux instead of router library | Keep dependencies minimal, design doc targets ~1000 lines |
+| 2026-01-26 | Embed templates/static with go:embed | Single binary deployment, no external files needed |
+| 2026-01-26 | 5MB chunk size for resumable uploads | Balance between request overhead and resume granularity |
+| 2026-01-26 | Alpine over scratch for final image | Need ca-certificates, minimal size impact |
 
 ## Issues Encountered
 
 | Phase | Issue | Resolution |
 |-------|-------|------------|
-| | | |
+| 2 | Accidentally committed test data and binary | Added .gitignore |
+| 7 | chunkReader needs to be exported for handlers | Moved assembly logic to handlers.go |

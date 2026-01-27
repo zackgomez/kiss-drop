@@ -1,0 +1,18 @@
+# Binary
+kiss-drop
+
+# Data directory
+data/
+
+# Git
+.git/
+.gitignore
+
+# Docs
+*.md
+!README.md
+
+# IDE
+.idea/
+.vscode/
+*.swp
