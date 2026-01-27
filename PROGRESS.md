@@ -14,7 +14,7 @@ Building a minimal self-hosted file sharing service in Go, following `DESIGN.md`
 | 4 | Password Protection | Complete |
 | 5 | Basic UI | Complete |
 | 6 | Expiration | Complete |
-| 7 | Resumable Uploads | Not started |
+| 7 | Resumable Uploads | Complete |
 | 8 | Docker | Not started |
 
 ---
@@ -207,10 +207,29 @@ curl -X POST -F "file=@test.txt" -F "expires_in=never" http://localhost:8080/api
 - Create `static/upload.js` for client-side chunking
 
 ### Implementation Notes
-_To be filled in during implementation_
+- Created `upload.go` with `UploadManager` for chunked upload sessions
+- 5MB chunk size by default
+- Sessions stored in memory with 24h timeout for cleanup
+- Three new API endpoints: `/api/upload/init`, `/api/upload/:id/chunk/:index`, `/api/upload/:id/complete`
+- Created `static/upload.js` with `ChunkedUploader` class
+- Files > 10MB automatically use chunked upload
+- Chunks stored on disk, assembled into final file on complete
 
 ### Testing
-_To be filled in during implementation_
+```bash
+# Init upload
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"fileName":"test.bin","fileSize":102400}' \
+  http://localhost:8080/api/upload/init
+# Returns: {"uploadId":"xyz","chunkSize":5242880,"totalChunks":1}
+
+# Upload chunk
+curl -X POST --data-binary @chunk0 http://localhost:8080/api/upload/xyz/chunk/0
+
+# Complete
+curl -X POST http://localhost:8080/api/upload/xyz/complete
+# Returns: {"id":"abc","url":"http://localhost:8080/s/abc"}
+```
 
 ---
 

@@ -64,6 +64,12 @@ func main() {
 		log.Fatalf("Failed to initialize storage: %v", err)
 	}
 
+	// Initialize upload manager
+	uploads, err := NewUploadManager(dataDir)
+	if err != nil {
+		log.Fatalf("Failed to initialize upload manager: %v", err)
+	}
+
 	// Start cleanup worker (runs every hour)
 	startCleanupWorker(storage, time.Hour)
 
@@ -77,7 +83,7 @@ func main() {
 	}
 
 	// Initialize handlers
-	handlers := NewHandlers(storage, auth, baseURL, defaultExpiry)
+	handlers := NewHandlers(storage, uploads, auth, baseURL, defaultExpiry)
 
 	// Serve static files
 	staticContent, err := fs.Sub(staticFS, "static")
@@ -101,6 +107,19 @@ func main() {
 
 	// API Routes
 	http.HandleFunc("/api/upload", handlers.HandleUpload)
+	http.HandleFunc("/api/upload/init", handlers.HandleUploadInit)
+	http.HandleFunc("/api/upload/", func(w http.ResponseWriter, r *http.Request) {
+		// Route chunked upload endpoints
+		path := r.URL.Path
+		if strings.Contains(path, "/chunk/") {
+			handlers.HandleUploadChunk(w, r)
+		} else if strings.HasSuffix(path, "/complete") {
+			handlers.HandleUploadComplete(w, r)
+		} else {
+			http.NotFound(w, r)
+		}
+	})
+
 	http.HandleFunc("/api/share/", func(w http.ResponseWriter, r *http.Request) {
 		// Route to appropriate handler based on path
 		if strings.HasSuffix(r.URL.Path, "/download") {

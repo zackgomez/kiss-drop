@@ -14,15 +14,17 @@ import (
 // Handlers holds HTTP handlers and their dependencies
 type Handlers struct {
 	storage       *Storage
+	uploads       *UploadManager
 	auth          *Auth
 	baseURL       string
 	defaultExpiry time.Duration
 }
 
 // NewHandlers creates a new Handlers instance
-func NewHandlers(storage *Storage, auth *Auth, baseURL string, defaultExpiry time.Duration) *Handlers {
+func NewHandlers(storage *Storage, uploads *UploadManager, auth *Auth, baseURL string, defaultExpiry time.Duration) *Handlers {
 	return &Handlers{
 		storage:       storage,
+		uploads:       uploads,
 		auth:          auth,
 		baseURL:       strings.TrimSuffix(baseURL, "/"),
 		defaultExpiry: defaultExpiry,
@@ -263,4 +265,165 @@ func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/octet-stream")
 
 	http.ServeFile(w, r, filePath)
+}
+
+// HandleUploadInit handles POST /api/upload/init
+func (h *Handlers) HandleUploadInit(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		FileName  string `json:"fileName"`
+		FileSize  int64  `json:"fileSize"`
+		Password  string `json:"password,omitempty"`
+		ExpiresIn string `json:"expiresIn,omitempty"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.FileName == "" || req.FileSize <= 0 {
+		http.Error(w, "fileName and fileSize are required", http.StatusBadRequest)
+		return
+	}
+
+	fileName := sanitizeFileName(req.FileName)
+
+	session, err := h.uploads.InitUpload(fileName, req.FileSize, req.Password, req.ExpiresIn)
+	if err != nil {
+		log.Printf("Error initializing upload: %v", err)
+		http.Error(w, "Error initializing upload", http.StatusInternalServerError)
+		return
+	}
+
+	response := InitUploadResponse{
+		UploadID:    session.ID,
+		ChunkSize:   session.ChunkSize,
+		TotalChunks: session.TotalChunks,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// HandleUploadChunk handles POST /api/upload/:uploadId/chunk/:index
+func (h *Handlers) HandleUploadChunk(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract uploadId and index from path
+	// Path format: /api/upload/{uploadId}/chunk/{index}
+	path := strings.TrimPrefix(r.URL.Path, "/api/upload/")
+	parts := strings.Split(path, "/chunk/")
+	if len(parts) != 2 {
+		http.Error(w, "Invalid path", http.StatusBadRequest)
+		return
+	}
+
+	uploadID := parts[0]
+	index, err := strconv.Atoi(parts[1])
+	if err != nil {
+		http.Error(w, "Invalid chunk index", http.StatusBadRequest)
+		return
+	}
+
+	session := h.uploads.GetSession(uploadID)
+	if session == nil {
+		http.Error(w, "Upload session not found", http.StatusNotFound)
+		return
+	}
+
+	if err := h.uploads.ReceiveChunk(uploadID, index, r.Body); err != nil {
+		log.Printf("Error receiving chunk: %v", err)
+		http.Error(w, "Error receiving chunk", http.StatusInternalServerError)
+		return
+	}
+
+	response := ChunkResponse{
+		Received: h.uploads.ReceivedCount(uploadID),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// HandleUploadComplete handles POST /api/upload/:uploadId/complete
+func (h *Handlers) HandleUploadComplete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract uploadId from path
+	path := strings.TrimPrefix(r.URL.Path, "/api/upload/")
+	uploadID := strings.TrimSuffix(path, "/complete")
+
+	session := h.uploads.GetSession(uploadID)
+	if session == nil {
+		http.Error(w, "Upload session not found", http.StatusNotFound)
+		return
+	}
+
+	if !h.uploads.IsComplete(uploadID) {
+		http.Error(w, "Upload not complete", http.StatusBadRequest)
+		return
+	}
+
+	// Calculate expiration based on session settings
+	var expiresAt *time.Time
+	if session.ExpiresIn == "" || session.ExpiresIn == "default" {
+		if h.defaultExpiry > 0 {
+			t := time.Now().Add(h.defaultExpiry)
+			expiresAt = &t
+		}
+	} else if session.ExpiresIn != "never" {
+		days, err := strconv.Atoi(session.ExpiresIn)
+		if err == nil && days > 0 {
+			t := time.Now().Add(time.Duration(days) * 24 * time.Hour)
+			expiresAt = &t
+		}
+	}
+
+	// Hash password if provided
+	var passwordHash string
+	if session.Password != "" {
+		hash, err := HashPassword(session.Password)
+		if err != nil {
+			log.Printf("Error hashing password: %v", err)
+			http.Error(w, "Error processing password", http.StatusInternalServerError)
+			return
+		}
+		passwordHash = hash
+	}
+
+	// Create the share by reading all chunks
+	reader := &chunkReader{
+		um:       h.uploads,
+		uploadID: uploadID,
+		session:  session,
+	}
+
+	meta, err := h.storage.CreateShare(reader, session.FileName, session.FileSize, expiresAt, passwordHash)
+	if err != nil {
+		log.Printf("Error creating share: %v", err)
+		http.Error(w, "Error creating share", http.StatusInternalServerError)
+		return
+	}
+
+	// Cleanup the upload session
+	h.uploads.Cleanup(uploadID)
+
+	response := map[string]string{
+		"id":  meta.ID,
+		"url": h.baseURL + "/s/" + meta.ID,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
