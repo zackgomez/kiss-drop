@@ -12,13 +12,15 @@ import (
 // Handlers holds HTTP handlers and their dependencies
 type Handlers struct {
 	storage *Storage
+	auth    *Auth
 	baseURL string
 }
 
 // NewHandlers creates a new Handlers instance
-func NewHandlers(storage *Storage, baseURL string) *Handlers {
+func NewHandlers(storage *Storage, auth *Auth, baseURL string) *Handlers {
 	return &Handlers{
 		storage: storage,
+		auth:    auth,
 		baseURL: strings.TrimSuffix(baseURL, "/"),
 	}
 }
@@ -69,8 +71,20 @@ func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 
 	fileName := sanitizeFileName(header.Filename)
 
-	// Create the share (no password or expiration for now)
-	meta, err := h.storage.CreateShare(file, fileName, header.Size, nil, "")
+	// Handle optional password
+	var passwordHash string
+	if password := r.FormValue("password"); password != "" {
+		hash, err := HashPassword(password)
+		if err != nil {
+			log.Printf("Error hashing password: %v", err)
+			http.Error(w, "Error processing password", http.StatusInternalServerError)
+			return
+		}
+		passwordHash = hash
+	}
+
+	// Create the share
+	meta, err := h.storage.CreateShare(file, fileName, header.Size, nil, passwordHash)
 	if err != nil {
 		log.Printf("Error creating share: %v", err)
 		http.Error(w, "Error saving file", http.StatusInternalServerError)
@@ -135,6 +149,56 @@ func (h *Handlers) HandleShareInfo(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+// HandleUnlock handles POST /api/share/:id/unlock
+func (h *Handlers) HandleUnlock(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract ID from path like /api/share/abc123/unlock
+	path := strings.TrimPrefix(r.URL.Path, "/api/share/")
+	path = strings.TrimSuffix(path, "/unlock")
+	id := path
+
+	if id == "" || strings.Contains(id, "/") {
+		http.Error(w, "Invalid share ID", http.StatusBadRequest)
+		return
+	}
+
+	meta, err := h.storage.GetShare(id)
+	if err != nil {
+		log.Printf("Error getting share: %v", err)
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+	if meta == nil {
+		http.Error(w, "Share not found", http.StatusNotFound)
+		return
+	}
+
+	// Parse password from JSON body
+	var body struct {
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Verify password
+	if meta.PasswordHash == "" || !VerifyPassword(body.Password, meta.PasswordHash) {
+		http.Error(w, "Invalid password", http.StatusUnauthorized)
+		return
+	}
+
+	// Set unlock cookie
+	h.auth.SetUnlockCookie(w, id)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{"success": true})
+}
+
 // HandleDownload handles GET /api/share/:id/download
 func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -163,7 +227,11 @@ func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Check password in Phase 4
+	// Check password protection
+	if meta.PasswordHash != "" && !h.auth.IsUnlocked(r, id) {
+		http.Error(w, "Password required", http.StatusUnauthorized)
+		return
+	}
 
 	filePath := h.storage.GetFilePath(id, meta.FileName)
 

@@ -18,6 +18,7 @@ func main() {
 	port := getEnv("PORT", "8080")
 	dataDir := getEnv("DATA_DIR", "./data")
 	baseURL := getEnv("BASE_URL", "http://localhost:"+port)
+	cookieSecret := os.Getenv("COOKIE_SECRET") // Empty = random per restart
 
 	// Initialize storage
 	storage, err := NewStorage(dataDir)
@@ -25,8 +26,11 @@ func main() {
 		log.Fatalf("Failed to initialize storage: %v", err)
 	}
 
+	// Initialize auth
+	auth := NewAuth(cookieSecret)
+
 	// Initialize handlers
-	handlers := NewHandlers(storage, baseURL)
+	handlers := NewHandlers(storage, auth, baseURL)
 
 	// Routes
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -43,6 +47,8 @@ func main() {
 		// Route to appropriate handler based on path
 		if strings.HasSuffix(r.URL.Path, "/download") {
 			handlers.HandleDownload(w, r)
+		} else if strings.HasSuffix(r.URL.Path, "/unlock") {
+			handlers.HandleUnlock(w, r)
 		} else {
 			handlers.HandleShareInfo(w, r)
 		}

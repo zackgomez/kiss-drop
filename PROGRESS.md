@@ -11,7 +11,7 @@ Building a minimal self-hosted file sharing service in Go, following `DESIGN.md`
 | 1 | Project Setup | Complete |
 | 2 | Core Upload (Non-Resumable) | Complete |
 | 3 | Download Flow | Complete |
-| 4 | Password Protection | Not started |
+| 4 | Password Protection | Complete |
 | 5 | Basic UI | Not started |
 | 6 | Expiration | Not started |
 | 7 | Resumable Uploads | Not started |
@@ -105,10 +105,33 @@ curl http://localhost:8080/api/share/1itfPbHF/download
 - Gate download behind cookie check
 
 ### Implementation Notes
-_To be filled in during implementation_
+- Created `auth.go` with argon2id password hashing (using golang.org/x/crypto/argon2)
+- `HashPassword()` generates salt + hash, encodes as `salt:hash` in hex
+- `VerifyPassword()` uses constant-time comparison
+- Cookie-based unlock with HMAC-signed cookies (24h expiry)
+- `COOKIE_SECRET` env var for persistent sessions across restarts
+- Download endpoint checks for valid unlock cookie before serving
 
 ### Testing
-_To be filled in during implementation_
+```bash
+# Upload with password
+curl -X POST -F "file=@test.txt" -F "password=secret123" http://localhost:8080/api/upload
+
+# Shows passwordRequired: true
+curl http://localhost:8080/api/share/$ID
+# Returns: {"passwordRequired":true,...}
+
+# Download blocked
+curl http://localhost:8080/api/share/$ID/download
+# Returns: 401 Password required
+
+# Unlock
+curl -c cookies.txt -X POST -H "Content-Type: application/json" \
+  -d '{"password":"secret123"}' http://localhost:8080/api/share/$ID/unlock
+
+# Download with cookie works
+curl -b cookies.txt http://localhost:8080/api/share/$ID/download
+```
 
 ---
 
