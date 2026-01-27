@@ -16,6 +16,8 @@ Building a minimal self-hosted file sharing service in Go, following `DESIGN.md`
 | 6 | Expiration | Complete |
 | 7 | Resumable Uploads | Complete |
 | 8 | Docker | Complete |
+| 9 | GitHub Actions CI/CD | Complete |
+| 10 | README & Public Release | Complete |
 
 ---
 
@@ -283,3 +285,33 @@ curl http://localhost:8080/
 |-------|-------|------------|
 | 2 | Accidentally committed test data and binary | Added .gitignore |
 | 7 | chunkReader needs to be exported for handlers | Moved assembly logic to handlers.go |
+
+---
+
+## Phase 9: GitHub Actions CI/CD
+
+**Goal:** Automated Docker builds on push
+
+### Implementation Notes
+- Created `.github/workflows/docker.yml`
+- Builds on push to main and tags
+- Pushes to GitHub Container Registry (ghcr.io)
+- Uses Docker layer caching for faster builds
+- Semantic versioning tags when using `v*` tags
+
+### Testing
+Push to main triggers build, image available at `ghcr.io/zackgomez/kiss-drop:main`
+
+---
+
+## Phase 10: README & Public Release
+
+**Goal:** Documentation and public release
+
+### Implementation Notes
+- Created comprehensive README with usage, API docs, project structure
+- Added authorship section crediting Claude as the author
+- Made repository public
+
+### Testing
+Repository visible at https://github.com/zackgomez/kiss-drop
