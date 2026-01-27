@@ -221,13 +221,13 @@ h1 {
     font-size: 14px;
 }
 
-.unlock-form label {
+.download-form label {
     display: block;
     color: #666;
     font-size: 14px;
 }
 
-.unlock-form input {
+.download-form input {
     width: 100%;
     padding: 12px;
     margin-top: 5px;
@@ -236,7 +236,7 @@ h1 {
     font-size: 14px;
 }
 
-.unlock-form input:focus {
+.download-form input:focus {
     outline: none;
     border-color: #007bff;
 }

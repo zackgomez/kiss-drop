@@ -24,71 +24,22 @@
         </div>
 
         {{if .PasswordRequired}}
-        <div id="unlock-form" class="unlock-form">
+        <form action="/api/share/{{.ID}}/download" method="POST" class="download-form">
             <label>
                 Password:
-                <input type="password" id="password" placeholder="Enter password">
+                <input type="password" name="password" placeholder="Enter password" required>
             </label>
-            <button id="unlock-btn" class="btn">Unlock</button>
-            <div id="error" class="error" hidden></div>
-        </div>
-        {{end}}
-
-        <div id="download-section" class="download-section" {{if .PasswordRequired}}hidden{{end}}>
+            <button type="submit" class="btn">Download</button>
+        </form>
+        {{else}}
+        <div class="download-section">
             <a href="/api/share/{{.ID}}/download" class="btn btn-download">Download</a>
         </div>
+        {{end}}
 
         <div class="back-link">
             <a href="/">Upload another file</a>
         </div>
     </div>
-
-    {{if .PasswordRequired}}
-    <script>
-        const unlockBtn = document.getElementById('unlock-btn');
-        const passwordInput = document.getElementById('password');
-        const errorDiv = document.getElementById('error');
-        const unlockForm = document.getElementById('unlock-form');
-        const downloadSection = document.getElementById('download-section');
-
-        async function unlock() {
-            const password = passwordInput.value;
-            if (!password) {
-                errorDiv.textContent = 'Please enter a password';
-                errorDiv.hidden = false;
-                return;
-            }
-
-            unlockBtn.disabled = true;
-            errorDiv.hidden = true;
-
-            try {
-                const response = await fetch('/api/share/{{.ID}}/unlock', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({password})
-                });
-
-                if (response.ok) {
-                    unlockForm.hidden = true;
-                    downloadSection.hidden = false;
-                } else {
-                    errorDiv.textContent = 'Invalid password';
-                    errorDiv.hidden = false;
-                    unlockBtn.disabled = false;
-                }
-            } catch (err) {
-                errorDiv.textContent = 'Error: ' + err.message;
-                errorDiv.hidden = false;
-                unlockBtn.disabled = false;
-            }
-        }
-
-        unlockBtn.addEventListener('click', unlock);
-        passwordInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') unlock();
-        });
-    </script>
-    {{end}}
 </body>
 </html>

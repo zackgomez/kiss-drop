@@ -55,7 +55,6 @@ func main() {
 	port := getEnv("PORT", "8080")
 	dataDir := getEnv("DATA_DIR", "./data")
 	baseURL := getEnv("BASE_URL", "http://localhost:"+port)
-	cookieSecret := os.Getenv("COOKIE_SECRET") // Empty = random per restart
 	defaultExpiry := parseDuration(getEnv("DEFAULT_EXPIRY", "30d"), 30)
 
 	// Initialize storage
@@ -73,9 +72,6 @@ func main() {
 	// Start cleanup worker (runs every hour)
 	startCleanupWorker(storage, time.Hour)
 
-	// Initialize auth
-	auth := NewAuth(cookieSecret)
-
 	// Load templates
 	templates, err := LoadTemplates()
 	if err != nil {
@@ -83,7 +79,7 @@ func main() {
 	}
 
 	// Initialize handlers
-	handlers := NewHandlers(storage, uploads, auth, baseURL, defaultExpiry)
+	handlers := NewHandlers(storage, uploads, baseURL, defaultExpiry)
 
 	// Serve static files
 	staticContent, err := fs.Sub(staticFS, "static")
@@ -124,8 +120,6 @@ func main() {
 		// Route to appropriate handler based on path
 		if strings.HasSuffix(r.URL.Path, "/download") {
 			handlers.HandleDownload(w, r)
-		} else if strings.HasSuffix(r.URL.Path, "/unlock") {
-			handlers.HandleUnlock(w, r)
 		} else {
 			handlers.HandleShareInfo(w, r)
 		}

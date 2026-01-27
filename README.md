@@ -41,7 +41,6 @@ All configuration via environment variables:
 | `DATA_DIR` | /data | Where files are stored |
 | `BASE_URL` | http://localhost:8080 | URL for generated share links |
 | `DEFAULT_EXPIRY` | 30d | Default file expiration |
-| `COOKIE_SECRET` | (random) | Secret for signing cookies (set for persistence across restarts) |
 
 ## API
 
@@ -51,9 +50,9 @@ POST /api/upload/init         # Start chunked upload
 POST /api/upload/:id/chunk/:n # Upload chunk
 POST /api/upload/:id/complete # Finalize chunked upload
 
-GET  /api/share/:id           # Get share metadata
-POST /api/share/:id/unlock    # Unlock password-protected share
-GET  /api/share/:id/download  # Download file
+GET  /api/share/:id              # Get share metadata
+GET  /api/share/:id/download     # Download (non-protected, or ?password=xxx)
+POST /api/share/:id/download     # Download (password in form body)
 ```
 
 ## Project Structure
