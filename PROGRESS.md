@@ -321,8 +321,15 @@ Repository visible at https://github.com/zackgomez/kiss-drop
 ## Future Ideas
 
 ### Phone to Desktop/Claude Features
-- Store more metadata: uploader IP, uploader device, file type
-- List API (all / recent N)
+- ~~Store more metadata: uploader IP, uploader device, file type~~ (Done)
+- ~~List API (all / recent N)~~ (Done)
+
+#### Implementation Notes (2026-01-27)
+- Added `UploaderIP`, `UserAgent`, `ContentType` fields to `ShareMeta` struct
+- `getClientIP()` helper extracts IP from X-Forwarded-For, X-Real-IP, or RemoteAddr
+- Both regular and chunked uploads capture metadata at init time
+- New `GET /api/shares` endpoint lists all shares sorted by created_at desc
+- `GET /api/shares?limit=N` returns only the most recent N shares
 
 ### Later (when needed)
 - SQLite DB when file-based metadata ops become unwieldy

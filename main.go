@@ -102,6 +102,7 @@ func main() {
 	})
 
 	// API Routes
+	http.HandleFunc("/api/shares", handlers.HandleListShares)
 	http.HandleFunc("/api/upload", handlers.HandleUpload)
 	http.HandleFunc("/api/upload/init", handlers.HandleUploadInit)
 	http.HandleFunc("/api/upload/", func(w http.ResponseWriter, r *http.Request) {

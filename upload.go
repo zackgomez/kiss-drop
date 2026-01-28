@@ -27,6 +27,9 @@ type UploadSession struct {
 	ReceivedMask []bool     `json:"received_mask"`
 	CreatedAt    time.Time  `json:"created_at"`
 	LastActivity time.Time  `json:"last_activity"`
+	UploaderIP   string     `json:"uploader_ip,omitempty"`
+	UserAgent    string     `json:"user_agent,omitempty"`
+	ContentType  string     `json:"content_type,omitempty"`
 	mu           sync.Mutex `json:"-"`
 }
 
@@ -71,7 +74,7 @@ func (um *UploadManager) chunkPath(uploadID string, index int) string {
 }
 
 // InitUpload creates a new upload session
-func (um *UploadManager) InitUpload(fileName string, fileSize int64, password, expiresIn string) (*UploadSession, error) {
+func (um *UploadManager) InitUpload(fileName string, fileSize int64, password, expiresIn string, info *UploadInfo) (*UploadSession, error) {
 	id, err := GenerateID()
 	if err != nil {
 		return nil, fmt.Errorf("generating upload ID: %w", err)
@@ -100,6 +103,11 @@ func (um *UploadManager) InitUpload(fileName string, fileSize int64, password, e
 		ReceivedMask: make([]bool, totalChunks),
 		CreatedAt:    time.Now(),
 		LastActivity: time.Now(),
+	}
+	if info != nil {
+		session.UploaderIP = info.UploaderIP
+		session.UserAgent = info.UserAgent
+		session.ContentType = info.ContentType
 	}
 
 	um.mu.Lock()
@@ -220,8 +228,13 @@ func (um *UploadManager) AssembleFile(uploadID string, storage *Storage) (*Share
 		passwordHash = hash
 	}
 
-	// Create the share
-	meta, err := storage.CreateShare(reader, session.FileName, session.FileSize, expiresAt, passwordHash)
+	// Create the share with upload info
+	info := &UploadInfo{
+		UploaderIP:  session.UploaderIP,
+		UserAgent:   session.UserAgent,
+		ContentType: session.ContentType,
+	}
+	meta, err := storage.CreateShare(reader, session.FileName, session.FileSize, expiresAt, passwordHash, info)
 	if err != nil {
 		return nil, fmt.Errorf("creating share: %w", err)
 	}

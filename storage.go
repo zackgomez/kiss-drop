@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 )
 
@@ -18,6 +19,9 @@ type ShareMeta struct {
 	PasswordHash string     `json:"password_hash,omitempty"`
 	FileName     string     `json:"file_name"`
 	FileSize     int64      `json:"file_size"`
+	UploaderIP   string     `json:"uploader_ip,omitempty"`
+	UserAgent    string     `json:"user_agent,omitempty"`
+	ContentType  string     `json:"content_type,omitempty"`
 }
 
 // Storage handles file and metadata operations
@@ -62,8 +66,15 @@ func (s *Storage) filePath(id, fileName string) string {
 	return filepath.Join(s.shareDir(id), fileName)
 }
 
+// UploadInfo holds request metadata for a file upload
+type UploadInfo struct {
+	UploaderIP  string
+	UserAgent   string
+	ContentType string
+}
+
 // CreateShare creates a new share with the given file
-func (s *Storage) CreateShare(file io.Reader, fileName string, fileSize int64, expiresAt *time.Time, passwordHash string) (*ShareMeta, error) {
+func (s *Storage) CreateShare(file io.Reader, fileName string, fileSize int64, expiresAt *time.Time, passwordHash string, info *UploadInfo) (*ShareMeta, error) {
 	id, err := GenerateID()
 	if err != nil {
 		return nil, fmt.Errorf("generating ID: %w", err)
@@ -98,6 +109,11 @@ func (s *Storage) CreateShare(file io.Reader, fileName string, fileSize int64, e
 		PasswordHash: passwordHash,
 		FileName:     fileName,
 		FileSize:     written,
+	}
+	if info != nil {
+		meta.UploaderIP = info.UploaderIP
+		meta.UserAgent = info.UserAgent
+		meta.ContentType = info.ContentType
 	}
 
 	// Save metadata
@@ -184,4 +200,42 @@ func (s *Storage) CleanupExpired() (int, error) {
 	}
 
 	return deleted, nil
+}
+
+// ListShares returns all shares sorted by created_at descending.
+// If limit > 0, returns only the most recent N shares.
+func (s *Storage) ListShares(limit int) ([]*ShareMeta, error) {
+	sharesDir := filepath.Join(s.dataDir, "shares")
+	entries, err := os.ReadDir(sharesDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []*ShareMeta{}, nil
+		}
+		return nil, fmt.Errorf("reading shares directory: %w", err)
+	}
+
+	var shares []*ShareMeta
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		meta, err := s.GetShare(entry.Name())
+		if err != nil || meta == nil {
+			continue
+		}
+		shares = append(shares, meta)
+	}
+
+	// Sort by created_at descending (newest first)
+	sort.Slice(shares, func(i, j int) bool {
+		return shares[i].CreatedAt.After(shares[j].CreatedAt)
+	})
+
+	// Apply limit if specified
+	if limit > 0 && len(shares) > limit {
+		shares = shares[:limit]
+	}
+
+	return shares, nil
 }

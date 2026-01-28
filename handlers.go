@@ -29,6 +29,28 @@ func NewHandlers(storage *Storage, uploads *UploadManager, baseURL string, defau
 	}
 }
 
+// getClientIP extracts the client IP from the request, preferring X-Forwarded-For
+func getClientIP(r *http.Request) string {
+	// Check X-Forwarded-For header (may contain comma-separated list)
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		// Take the first IP in the list (original client)
+		if idx := strings.Index(xff, ","); idx != -1 {
+			return strings.TrimSpace(xff[:idx])
+		}
+		return strings.TrimSpace(xff)
+	}
+	// Check X-Real-IP header
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		return xri
+	}
+	// Fall back to RemoteAddr (strip port)
+	ip := r.RemoteAddr
+	if idx := strings.LastIndex(ip, ":"); idx != -1 {
+		return ip[:idx]
+	}
+	return ip
+}
+
 // sanitizeFileName cleans up a filename for safe storage
 func sanitizeFileName(name string) string {
 	// Remove path components
@@ -106,8 +128,15 @@ func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	// "never" means no expiration (expiresAt stays nil)
 
+	// Capture upload metadata
+	info := &UploadInfo{
+		UploaderIP:  getClientIP(r),
+		UserAgent:   r.UserAgent(),
+		ContentType: header.Header.Get("Content-Type"),
+	}
+
 	// Create the share
-	meta, err := h.storage.CreateShare(file, fileName, header.Size, expiresAt, passwordHash)
+	meta, err := h.storage.CreateShare(file, fileName, header.Size, expiresAt, passwordHash, info)
 	if err != nil {
 		log.Printf("Error creating share: %v", err)
 		http.Error(w, "Error saving file", http.StatusInternalServerError)
@@ -229,10 +258,11 @@ func (h *Handlers) HandleUploadInit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		FileName  string `json:"fileName"`
-		FileSize  int64  `json:"fileSize"`
-		Password  string `json:"password,omitempty"`
-		ExpiresIn string `json:"expiresIn,omitempty"`
+		FileName    string `json:"fileName"`
+		FileSize    int64  `json:"fileSize"`
+		Password    string `json:"password,omitempty"`
+		ExpiresIn   string `json:"expiresIn,omitempty"`
+		ContentType string `json:"contentType,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -247,7 +277,14 @@ func (h *Handlers) HandleUploadInit(w http.ResponseWriter, r *http.Request) {
 
 	fileName := sanitizeFileName(req.FileName)
 
-	session, err := h.uploads.InitUpload(fileName, req.FileSize, req.Password, req.ExpiresIn)
+	// Capture upload metadata
+	info := &UploadInfo{
+		UploaderIP:  getClientIP(r),
+		UserAgent:   r.UserAgent(),
+		ContentType: req.ContentType,
+	}
+
+	session, err := h.uploads.InitUpload(fileName, req.FileSize, req.Password, req.ExpiresIn, info)
 	if err != nil {
 		log.Printf("Error initializing upload: %v", err)
 		http.Error(w, "Error initializing upload", http.StatusInternalServerError)
@@ -363,7 +400,14 @@ func (h *Handlers) HandleUploadComplete(w http.ResponseWriter, r *http.Request) 
 		session:  session,
 	}
 
-	meta, err := h.storage.CreateShare(reader, session.FileName, session.FileSize, expiresAt, passwordHash)
+	// Use upload info from session
+	info := &UploadInfo{
+		UploaderIP:  session.UploaderIP,
+		UserAgent:   session.UserAgent,
+		ContentType: session.ContentType,
+	}
+
+	meta, err := h.storage.CreateShare(reader, session.FileName, session.FileSize, expiresAt, passwordHash, info)
 	if err != nil {
 		log.Printf("Error creating share: %v", err)
 		http.Error(w, "Error creating share", http.StatusInternalServerError)
@@ -380,4 +424,63 @@ func (h *Handlers) HandleUploadComplete(w http.ResponseWriter, r *http.Request) 
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+// ShareListItem is the JSON response for a share in the list
+type ShareListItem struct {
+	ID               string  `json:"id"`
+	FileName         string  `json:"fileName"`
+	FileSize         int64   `json:"fileSize"`
+	CreatedAt        string  `json:"createdAt"`
+	ExpiresAt        *string `json:"expiresAt,omitempty"`
+	PasswordRequired bool    `json:"passwordRequired"`
+	UploaderIP       string  `json:"uploaderIP,omitempty"`
+	UserAgent        string  `json:"userAgent,omitempty"`
+	ContentType      string  `json:"contentType,omitempty"`
+}
+
+// HandleListShares handles GET /api/shares
+func (h *Handlers) HandleListShares(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Parse optional limit parameter
+	limit := 0
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if n, err := strconv.Atoi(limitStr); err == nil && n > 0 {
+			limit = n
+		}
+	}
+
+	shares, err := h.storage.ListShares(limit)
+	if err != nil {
+		log.Printf("Error listing shares: %v", err)
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+
+	// Convert to response format
+	items := make([]ShareListItem, 0, len(shares))
+	for _, meta := range shares {
+		item := ShareListItem{
+			ID:               meta.ID,
+			FileName:         meta.FileName,
+			FileSize:         meta.FileSize,
+			CreatedAt:        meta.CreatedAt.Format("2006-01-02T15:04:05Z"),
+			PasswordRequired: meta.PasswordHash != "",
+			UploaderIP:       meta.UploaderIP,
+			UserAgent:        meta.UserAgent,
+			ContentType:      meta.ContentType,
+		}
+		if meta.ExpiresAt != nil {
+			exp := meta.ExpiresAt.Format("2006-01-02T15:04:05Z")
+			item.ExpiresAt = &exp
+		}
+		items = append(items, item)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(items)
 }
