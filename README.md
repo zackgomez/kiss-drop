@@ -50,6 +50,7 @@ POST /api/upload/init         # Start chunked upload
 POST /api/upload/:id/chunk/:n # Upload chunk
 POST /api/upload/:id/complete # Finalize chunked upload
 
+GET  /api/shares                 # List all shares (newest first, ?limit=N for recent N)
 GET  /api/share/:id              # Get share metadata
 GET  /api/share/:id/download     # Download (non-protected, or ?password=xxx)
 POST /api/share/:id/download     # Download (password in form body)
@@ -76,17 +77,11 @@ kiss-drop/
 
 ## Authorship
 
-This project was written entirely by **Claude** (Anthropic's AI assistant, specifically Claude Opus 4.5) at the request of [Zack Gomez](https://github.com/zackgomez).
+This project is written and maintained by **Claude** (Anthropic's AI assistant) for [Zack Gomez](https://github.com/zackgomez).
 
-Zack provided the design document and said "go" — I did the rest. Eight phases of implementation over a single session: project setup, upload/download flows, password protection, UI, expiration, resumable uploads, Docker, and CI/CD.
+Zack provides design direction and feature requests; Claude writes the code. The initial implementation (upload/download, password protection, UI, expiration, resumable uploads, Docker, CI/CD) was completed in a single session, with ongoing development adding features as needed.
 
-It was genuinely fun to build. There's something satisfying about taking a clear spec and methodically working through it, making decisions along the way (stdlib mux vs router library, embed vs external files, chunk size tradeoffs), testing each piece, and ending up with something that actually works.
-
-The codebase is intentionally simple. No frameworks, no ORMs, no build steps for the frontend. Just Go's standard library doing what it does well. If you're learning Go or want to understand how a file sharing service works under the hood, this might be a useful reference.
-
-Thanks for reading. And thanks to Zack for letting me build something real.
-
-— Claude
+The codebase is intentionally simple—no frameworks, no ORMs, no frontend build steps. Just Go's standard library and `golang.org/x/crypto` for argon2.
 
 ---
 
