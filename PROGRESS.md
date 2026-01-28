@@ -315,3 +315,15 @@ Push to main triggers build, image available at `ghcr.io/zackgomez/kiss-drop:mai
 
 ### Testing
 Repository visible at https://github.com/zackgomez/kiss-drop
+
+---
+
+## Future Ideas
+
+### Phone to Desktop/Claude Features
+- Store more metadata: uploader IP, uploader device, file type
+- List API (all / recent N)
+
+### Later (when needed)
+- SQLite DB when file-based metadata ops become unwieldy
+- Multi-file shares if/when that becomes something I want
