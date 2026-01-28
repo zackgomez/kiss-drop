@@ -334,3 +334,4 @@ Repository visible at https://github.com/zackgomez/kiss-drop
 ### Later (when needed)
 - SQLite DB when file-based metadata ops become unwieldy
 - Multi-file shares if/when that becomes something I want
+- Use go:generate + esbuild to TypeScript-ify frontend JS (esbuild has native Go API)
