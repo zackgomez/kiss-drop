@@ -97,18 +97,6 @@ func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 
 	fileName := sanitizeFileName(header.Filename)
 
-	// Handle optional password
-	var passwordHash string
-	if password := r.FormValue("password"); password != "" {
-		hash, err := HashPassword(password)
-		if err != nil {
-			log.Printf("Error hashing password: %v", err)
-			http.Error(w, "Error processing password", http.StatusInternalServerError)
-			return
-		}
-		passwordHash = hash
-	}
-
 	// Handle expiration
 	var expiresAt *time.Time
 	expiresInStr := r.FormValue("expires_in")
@@ -136,7 +124,7 @@ func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create the share
-	meta, err := h.storage.CreateShare(file, fileName, header.Size, expiresAt, passwordHash, info)
+	meta, err := h.storage.CreateShare(file, fileName, header.Size, expiresAt, info)
 	if err != nil {
 		log.Printf("Error creating share: %v", err)
 		http.Error(w, "Error saving file", http.StatusInternalServerError)
@@ -155,11 +143,10 @@ func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 
 // ShareInfoResponse is the JSON response for share metadata
 type ShareInfoResponse struct {
-	ID               string  `json:"id"`
-	FileName         string  `json:"fileName"`
-	FileSize         int64   `json:"fileSize"`
-	ExpiresAt        *string `json:"expiresAt,omitempty"`
-	PasswordRequired bool    `json:"passwordRequired"`
+	ID        string  `json:"id"`
+	FileName  string  `json:"fileName"`
+	FileSize  int64   `json:"fileSize"`
+	ExpiresAt *string `json:"expiresAt,omitempty"`
 }
 
 // HandleShareInfo handles GET /api/share/:id
@@ -187,10 +174,9 @@ func (h *Handlers) HandleShareInfo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := ShareInfoResponse{
-		ID:               meta.ID,
-		FileName:         meta.FileName,
-		FileSize:         meta.FileSize,
-		PasswordRequired: meta.PasswordHash != "",
+		ID:       meta.ID,
+		FileName: meta.FileName,
+		FileSize: meta.FileSize,
 	}
 	if meta.ExpiresAt != nil {
 		exp := meta.ExpiresAt.Format("2006-01-02T15:04:05Z")
@@ -201,12 +187,9 @@ func (h *Handlers) HandleShareInfo(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// HandleDownload handles GET/POST /api/share/:id/download
-// GET works for non-password-protected shares (direct download links)
-// GET with ?password=xxx works for password-protected shares
-// POST with password in form body also works for password-protected shares
+// HandleDownload handles GET /api/share/:id/download
 func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet && r.Method != http.MethodPost {
+	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -232,15 +215,6 @@ func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check password protection
-	if meta.PasswordHash != "" {
-		password := r.FormValue("password")
-		if !VerifyPassword(password, meta.PasswordHash) {
-			http.Error(w, "Password required", http.StatusUnauthorized)
-			return
-		}
-	}
-
 	filePath := h.storage.GetFilePath(id, meta.FileName)
 
 	// Set headers for download
@@ -260,7 +234,6 @@ func (h *Handlers) HandleUploadInit(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		FileName    string `json:"fileName"`
 		FileSize    int64  `json:"fileSize"`
-		Password    string `json:"password,omitempty"`
 		ExpiresIn   string `json:"expiresIn,omitempty"`
 		ContentType string `json:"contentType,omitempty"`
 	}
@@ -284,7 +257,7 @@ func (h *Handlers) HandleUploadInit(w http.ResponseWriter, r *http.Request) {
 		ContentType: req.ContentType,
 	}
 
-	session, err := h.uploads.InitUpload(fileName, req.FileSize, req.Password, req.ExpiresIn, info)
+	session, err := h.uploads.InitUpload(fileName, req.FileSize, req.ExpiresIn, info)
 	if err != nil {
 		log.Printf("Error initializing upload: %v", err)
 		http.Error(w, "Error initializing upload", http.StatusInternalServerError)
@@ -381,18 +354,6 @@ func (h *Handlers) HandleUploadComplete(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	// Hash password if provided
-	var passwordHash string
-	if session.Password != "" {
-		hash, err := HashPassword(session.Password)
-		if err != nil {
-			log.Printf("Error hashing password: %v", err)
-			http.Error(w, "Error processing password", http.StatusInternalServerError)
-			return
-		}
-		passwordHash = hash
-	}
-
 	// Create the share by reading all chunks
 	reader := &chunkReader{
 		um:       h.uploads,
@@ -407,7 +368,7 @@ func (h *Handlers) HandleUploadComplete(w http.ResponseWriter, r *http.Request) 
 		ContentType: session.ContentType,
 	}
 
-	meta, err := h.storage.CreateShare(reader, session.FileName, session.FileSize, expiresAt, passwordHash, info)
+	meta, err := h.storage.CreateShare(reader, session.FileName, session.FileSize, expiresAt, info)
 	if err != nil {
 		log.Printf("Error creating share: %v", err)
 		http.Error(w, "Error creating share", http.StatusInternalServerError)
@@ -428,15 +389,14 @@ func (h *Handlers) HandleUploadComplete(w http.ResponseWriter, r *http.Request) 
 
 // ShareListItem is the JSON response for a share in the list
 type ShareListItem struct {
-	ID               string  `json:"id"`
-	FileName         string  `json:"fileName"`
-	FileSize         int64   `json:"fileSize"`
-	CreatedAt        string  `json:"createdAt"`
-	ExpiresAt        *string `json:"expiresAt,omitempty"`
-	PasswordRequired bool    `json:"passwordRequired"`
-	UploaderIP       string  `json:"uploaderIP,omitempty"`
-	UserAgent        string  `json:"userAgent,omitempty"`
-	ContentType      string  `json:"contentType,omitempty"`
+	ID          string  `json:"id"`
+	FileName    string  `json:"fileName"`
+	FileSize    int64   `json:"fileSize"`
+	CreatedAt   string  `json:"createdAt"`
+	ExpiresAt   *string `json:"expiresAt,omitempty"`
+	UploaderIP  string  `json:"uploaderIP,omitempty"`
+	UserAgent   string  `json:"userAgent,omitempty"`
+	ContentType string  `json:"contentType,omitempty"`
 }
 
 // HandleListShares handles GET /api/shares
@@ -465,14 +425,13 @@ func (h *Handlers) HandleListShares(w http.ResponseWriter, r *http.Request) {
 	items := make([]ShareListItem, 0, len(shares))
 	for _, meta := range shares {
 		item := ShareListItem{
-			ID:               meta.ID,
-			FileName:         meta.FileName,
-			FileSize:         meta.FileSize,
-			CreatedAt:        meta.CreatedAt.Format("2006-01-02T15:04:05Z"),
-			PasswordRequired: meta.PasswordHash != "",
-			UploaderIP:       meta.UploaderIP,
-			UserAgent:        meta.UserAgent,
-			ContentType:      meta.ContentType,
+			ID:          meta.ID,
+			FileName:    meta.FileName,
+			FileSize:    meta.FileSize,
+			CreatedAt:   meta.CreatedAt.Format("2006-01-02T15:04:05Z"),
+			UploaderIP:  meta.UploaderIP,
+			UserAgent:   meta.UserAgent,
+			ContentType: meta.ContentType,
 		}
 		if meta.ExpiresAt != nil {
 			exp := meta.ExpiresAt.Format("2006-01-02T15:04:05Z")

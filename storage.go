@@ -13,15 +13,14 @@ import (
 
 // ShareMeta holds metadata for a shared file
 type ShareMeta struct {
-	ID           string     `json:"id"`
-	CreatedAt    time.Time  `json:"created_at"`
-	ExpiresAt    *time.Time `json:"expires_at,omitempty"`
-	PasswordHash string     `json:"password_hash,omitempty"`
-	FileName     string     `json:"file_name"`
-	FileSize     int64      `json:"file_size"`
-	UploaderIP   string     `json:"uploader_ip,omitempty"`
-	UserAgent    string     `json:"user_agent,omitempty"`
-	ContentType  string     `json:"content_type,omitempty"`
+	ID          string     `json:"id"`
+	CreatedAt   time.Time  `json:"created_at"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+	FileName    string     `json:"file_name"`
+	FileSize    int64      `json:"file_size"`
+	UploaderIP  string     `json:"uploader_ip,omitempty"`
+	UserAgent   string     `json:"user_agent,omitempty"`
+	ContentType string     `json:"content_type,omitempty"`
 }
 
 // Storage handles file and metadata operations
@@ -74,7 +73,7 @@ type UploadInfo struct {
 }
 
 // CreateShare creates a new share with the given file
-func (s *Storage) CreateShare(file io.Reader, fileName string, fileSize int64, expiresAt *time.Time, passwordHash string, info *UploadInfo) (*ShareMeta, error) {
+func (s *Storage) CreateShare(file io.Reader, fileName string, fileSize int64, expiresAt *time.Time, info *UploadInfo) (*ShareMeta, error) {
 	id, err := GenerateID()
 	if err != nil {
 		return nil, fmt.Errorf("generating ID: %w", err)
@@ -103,12 +102,11 @@ func (s *Storage) CreateShare(file io.Reader, fileName string, fileSize int64, e
 
 	// Create metadata
 	meta := &ShareMeta{
-		ID:           id,
-		CreatedAt:    time.Now().UTC(),
-		ExpiresAt:    expiresAt,
-		PasswordHash: passwordHash,
-		FileName:     fileName,
-		FileSize:     written,
+		ID:        id,
+		CreatedAt: time.Now().UTC(),
+		ExpiresAt: expiresAt,
+		FileName:  fileName,
+		FileSize:  written,
 	}
 	if info != nil {
 		meta.UploaderIP = info.UploaderIP

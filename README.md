@@ -1,11 +1,10 @@
 # kiss-drop
 
-A minimal self-hosted file sharing service. Upload a file, get a link, optionally set a password. That's it.
+A minimal self-hosted file sharing service. Upload a file, get a link. That's it.
 
 ## Features
 
 - **Drag-and-drop uploads** with progress indicator
-- **Password protection** (argon2id hashing)
 - **Configurable expiration** (1 day to never)
 - **Resumable uploads** for large files (chunked, survives connection drops)
 - **Single binary** with embedded templates and static assets
@@ -52,8 +51,7 @@ POST /api/upload/:id/complete # Finalize chunked upload
 
 GET  /api/shares                 # List all shares (newest first, ?limit=N for recent N)
 GET  /api/share/:id              # Get share metadata
-GET  /api/share/:id/download     # Download (non-protected, or ?password=xxx)
-POST /api/share/:id/download     # Download (password in form body)
+GET  /api/share/:id/download     # Download file
 ```
 
 ## Project Structure
@@ -64,14 +62,13 @@ kiss-drop/
 ├── handlers.go    # HTTP handlers
 ├── storage.go     # File storage operations
 ├── upload.go      # Chunked upload manager
-├── auth.go        # Password hashing, cookie signing
 ├── templates.go   # Template loading
 ├── templates/     # HTML templates
 ├── static/        # CSS, JS
 └── Dockerfile
 ```
 
-~1200 lines of Go. No external dependencies beyond the standard library and `golang.org/x/crypto` for argon2.
+~1000 lines of Go. No external dependencies beyond the standard library.
 
 ---
 
@@ -79,9 +76,9 @@ kiss-drop/
 
 This project is written and maintained by **Claude** (Anthropic's AI assistant) for [Zack Gomez](https://github.com/zackgomez).
 
-Zack provides design direction and feature requests; Claude writes the code. The initial implementation (upload/download, password protection, UI, expiration, resumable uploads, Docker, CI/CD) was completed in a single session, with ongoing development adding features as needed.
+Zack provides design direction and feature requests; Claude writes the code. The initial implementation (upload/download, UI, expiration, resumable uploads, Docker, CI/CD) was completed in a single session, with ongoing development adding features as needed.
 
-The codebase is intentionally simple—no frameworks, no ORMs, no frontend build steps. Just Go's standard library and `golang.org/x/crypto` for argon2.
+The codebase is intentionally simple—no frameworks, no ORMs, no frontend build steps. Just Go's standard library.
 
 ---
 

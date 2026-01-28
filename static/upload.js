@@ -5,7 +5,6 @@ const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks - must match server
 class ChunkedUploader {
     constructor(file, options = {}) {
         this.file = file;
-        this.password = options.password || '';
         this.expiresIn = options.expiresIn || 'default';
         this.onProgress = options.onProgress || (() => {});
         this.onComplete = options.onComplete || (() => {});
@@ -27,7 +26,6 @@ class ChunkedUploader {
                 body: JSON.stringify({
                     fileName: this.file.name,
                     fileSize: this.file.size,
-                    password: this.password,
                     expiresIn: this.expiresIn
                 })
             });

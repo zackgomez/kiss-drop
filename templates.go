@@ -46,7 +46,6 @@ type DownloadPageData struct {
 	FileSize          int64
 	FileSizeFormatted string
 	ExpiresAt         string
-	PasswordRequired  bool
 }
 
 func formatFileSize(bytes int64) string {
@@ -95,7 +94,6 @@ func (h *Handlers) HandleDownloadPage(w http.ResponseWriter, r *http.Request, tm
 		FileName:          meta.FileName,
 		FileSize:          meta.FileSize,
 		FileSizeFormatted: formatFileSize(meta.FileSize),
-		PasswordRequired:  meta.PasswordHash != "",
 	}
 
 	if meta.ExpiresAt != nil {

@@ -31,10 +31,6 @@
                     <option value="never">Never</option>
                 </select>
             </label>
-            <label>
-                Password (optional):
-                <input type="password" id="password" placeholder="Leave empty for no password">
-            </label>
         </div>
 
         <button id="upload-btn" class="btn" disabled>Upload</button>
@@ -68,7 +64,6 @@
         const shareLink = document.getElementById('share-link');
         const copyBtn = document.getElementById('copy-btn');
         const errorDiv = document.getElementById('error');
-        const passwordInput = document.getElementById('password');
         const expiresIn = document.getElementById('expires-in');
 
         let selectedFile = null;
@@ -119,9 +114,6 @@
             const formData = new FormData();
             formData.append('file', selectedFile);
             formData.append('expires_in', expiresIn.value);
-            if (passwordInput.value) {
-                formData.append('password', passwordInput.value);
-            }
 
             const xhr = new XMLHttpRequest();
 
@@ -158,7 +150,6 @@
 
         function uploadChunked() {
             const uploader = new ChunkedUploader(selectedFile, {
-                password: passwordInput.value,
                 expiresIn: expiresIn.value,
                 onProgress: (percent) => {
                     progressBar.style.width = percent + '%';

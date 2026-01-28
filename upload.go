@@ -22,7 +22,6 @@ type UploadSession struct {
 	FileSize     int64      `json:"file_size"`
 	ChunkSize    int64      `json:"chunk_size"`
 	TotalChunks  int        `json:"total_chunks"`
-	Password     string     `json:"password,omitempty"` // unhashed, only in memory
 	ExpiresIn    string     `json:"expires_in,omitempty"`
 	ReceivedMask []bool     `json:"received_mask"`
 	CreatedAt    time.Time  `json:"created_at"`
@@ -74,7 +73,7 @@ func (um *UploadManager) chunkPath(uploadID string, index int) string {
 }
 
 // InitUpload creates a new upload session
-func (um *UploadManager) InitUpload(fileName string, fileSize int64, password, expiresIn string, info *UploadInfo) (*UploadSession, error) {
+func (um *UploadManager) InitUpload(fileName string, fileSize int64, expiresIn string, info *UploadInfo) (*UploadSession, error) {
 	id, err := GenerateID()
 	if err != nil {
 		return nil, fmt.Errorf("generating upload ID: %w", err)
@@ -98,7 +97,6 @@ func (um *UploadManager) InitUpload(fileName string, fileSize int64, password, e
 		FileSize:     fileSize,
 		ChunkSize:    chunkSize,
 		TotalChunks:  totalChunks,
-		Password:     password,
 		ExpiresIn:    expiresIn,
 		ReceivedMask: make([]bool, totalChunks),
 		CreatedAt:    time.Now(),
@@ -218,23 +216,13 @@ func (um *UploadManager) AssembleFile(uploadID string, storage *Storage) (*Share
 		// This is handled by the handler, but we need to pass it through
 	}
 
-	// Hash password if provided
-	var passwordHash string
-	if session.Password != "" {
-		hash, err := HashPassword(session.Password)
-		if err != nil {
-			return nil, fmt.Errorf("hashing password: %w", err)
-		}
-		passwordHash = hash
-	}
-
 	// Create the share with upload info
 	info := &UploadInfo{
 		UploaderIP:  session.UploaderIP,
 		UserAgent:   session.UserAgent,
 		ContentType: session.ContentType,
 	}
-	meta, err := storage.CreateShare(reader, session.FileName, session.FileSize, expiresAt, passwordHash, info)
+	meta, err := storage.CreateShare(reader, session.FileName, session.FileSize, expiresAt, info)
 	if err != nil {
 		return nil, fmt.Errorf("creating share: %w", err)
 	}

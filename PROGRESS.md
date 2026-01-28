@@ -331,6 +331,9 @@ Repository visible at https://github.com/zackgomez/kiss-drop
 - New `GET /api/shares` endpoint lists all shares sorted by created_at desc
 - `GET /api/shares?limit=N` returns only the most recent N shares
 
+### Removed Features (can be re-added later)
+- **Password protection** - Removed for simplicity since kiss-drop is internal-network-only. Was using argon2id hashing. Re-adding would require: auth.go, password fields in ShareMeta/UploadSession, password UI in templates, ~60 lines across handlers.
+
 ### Later (when needed)
 - SQLite DB when file-based metadata ops become unwieldy
 - Multi-file shares if/when that becomes something I want

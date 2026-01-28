@@ -23,19 +23,9 @@
             </div>
         </div>
 
-        {{if .PasswordRequired}}
-        <form action="/api/share/{{.ID}}/download" method="POST" class="download-form">
-            <label>
-                Password:
-                <input type="password" name="password" placeholder="Enter password" required>
-            </label>
-            <button type="submit" class="btn">Download</button>
-        </form>
-        {{else}}
         <div class="download-section">
             <a href="/api/share/{{.ID}}/download" class="btn btn-download">Download</a>
         </div>
-        {{end}}
 
         <div class="back-link">
             <a href="/">Upload another file</a>
